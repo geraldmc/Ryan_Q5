@@ -59,6 +59,28 @@ def build_feature_matrix(feature_set, tpm_filtered_path, regs_zscored_path, mad_
     return X
 
 
+def load_Xy(feature_set, tpm_filtered, regs_zscored, pheno, mad_stat):
+    """Load aligned features + labels. Shared by the harness and the bootstrap loop.
+
+    Returns (X, y, sample_ids): X is samples x genes (raw TPM, DataFrame), y is int
+    (1=bolted, 0=not), aligned so X row i corresponds to y[i].
+    """
+    ph = pd.read_csv(pheno, index_col=0)
+    y = (ph["bolting"].values == "Y").astype(int)   # 1 = bolted (23), 0 = not (45)
+    sample_ids = list(ph.index)
+
+    X = build_feature_matrix(feature_set, tpm_filtered, regs_zscored, mad_stat)
+
+    # alignment guard: X rows must match label order exactly
+    if list(X.index) != sample_ids:
+        missing = set(sample_ids) - set(X.index)
+        if missing:
+            raise ValueError(f"samples in labels but not in features: {sorted(missing)}")
+        X = X.loc[sample_ids]
+    assert list(X.index) == sample_ids, "alignment failed"
+    return X, y, sample_ids
+
+
 # --------------------------------------------------------------------------- #
 # Model registry: the Fork-2 switch. Each returns a bare estimator; make_model()
 # wraps it in the per-fold StandardScaler pipeline. Add new models here only.
@@ -133,23 +155,9 @@ def main():
 
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---- labels ----
-    ph = pd.read_csv(args.pheno, index_col=0)
-    y = (ph["bolting"].values == "Y").astype(int)   # 1 = bolted (23), 0 = not (45)
-    sample_ids = list(ph.index)                     # int (not bool) so XGBoost accepts it
-
-    # ---- features (raw) ----
-    X = build_feature_matrix(args.feature_set, args.tpm_filtered,
-                             args.regs_zscored, args.mad_stat)
-
-    # ---- alignment guard: X rows must match label order exactly ----
-    if list(X.index) != sample_ids:
-        # reindex X to the label order; fail loudly if any sample is absent
-        missing = set(sample_ids) - set(X.index)
-        if missing:
-            raise ValueError(f"samples in labels but not in features: {sorted(missing)}")
-        X = X.loc[sample_ids]
-    assert list(X.index) == sample_ids, "alignment failed"
+    # ---- features + labels (aligned) ----
+    X, y, sample_ids = load_Xy(args.feature_set, args.tpm_filtered,
+                               args.regs_zscored, args.pheno, args.mad_stat)
 
     fs_tag = args.feature_set + (f"_{args.mad_stat}" if args.feature_set == "mad5000" else "")
     tag = f"{args.model}_{fs_tag}"

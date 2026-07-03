@@ -136,6 +136,39 @@ Console output shows balanced accuracy, raw accuracy, and the confusion matrix.
 
 ---
 
+## Variance bands — the plant-bootstrap loop (`bootstrap.py`)
+
+`loo_harness.py` gives one point estimate per cell. `bootstrap.py` turns it into a
+**distribution** by resampling the 68 plants, so model × feature-set comparisons can
+be read with error bars. The **model seed is held fixed** across iterations — only
+the plant draw varies — so the spread reflects plant-sampling variability alone.
+
+Two scoring modes (`--method`):
+
+| Mode | What it does | Use for |
+|---|---|---|
+| `oob` | Out-of-bag **refit**: resample 68 w/ replacement, train on the in-bag draw, score on the ~37% out-of-bag plants (train/test never overlap). Leak-free. | ridge, rf, mlp, xgb |
+| `pred` | Prediction-bootstrap: run LOO **once**, then resample the 68 `(y_true, y_pred)` pairs. Cheap; captures metric noise but **not** refit variance (narrower band). | enet (refit-per-resample is too slow) |
+| `auto` | **default** — `enet` → `pred`, everything else → `oob`. | — |
+
+```bash
+# refit bootstrap for a fast model
+$PY bootstrap.py --model ridge --feature-set regs --n-boot 1000 \
+    --tpm-filtered $TPM --regs-zscored $REGS --pheno $PHENO --out-dir $OUT
+
+# enet uses the cheap prediction-bootstrap automatically (--method auto)
+$PY bootstrap.py --model enet --feature-set regs --n-boot 1000 \
+    --tpm-filtered $TPM --regs-zscored $REGS --pheno $PHENO --out-dir $OUT
+```
+
+Writes `boot_<tag>.csv` (the full score vector) and `boot_manifest_<tag>.json`
+(mean, std, 95% CI, seeds, skipped-resample count) to `--out-dir`. The `oob` band is
+wider and mildly pessimistic (bootstrap trains on ~63% unique plants); the `pred`
+band is narrower and centered on the LOO point — **the two are not directly
+comparable**, so read enet's band as a different kind of estimate.
+
+---
+
 ## Methodology notes (read before trusting numbers)
 
 - **Balanced accuracy is the headline metric**, not raw accuracy — the 23/45 class
@@ -153,5 +186,6 @@ Console output shows balanced accuracy, raw accuracy, and the confusion matrix.
   and `ridge`/`enet`/`mlp` are unweighted. Pick one policy before final runs.
 - **`enet` is slow** — it re-runs the paper's inner 5-fold × 10 Cs × 7 l1-ratios
   search on every LOO fold. Expect minutes on `regs`, much longer on `full`.
-- **Single-run point estimates only.** Variance (the plant-bootstrap loop) is a
-  separate, not-yet-built step.
+- **For variance bands, use `bootstrap.py`** (above) — `loo_harness.py` alone
+  reports single-run point estimates. The `oob` and `pred` bands mean different
+  things; don't compare them directly across models.
