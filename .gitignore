@@ -1,0 +1,21 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Virtual environment (recreate from requirements.txt)
+ryan-env/
+
+# Generated outputs (regenerable via the harness)
+results/
+
+# Model inputs (large; derived from the upstream repo / other_data)
+data/
+
+# Bulky raw upstream data
+other_data/
+
+# macOS Finder litter
+.DS_Store
+
+# Nested upstream clone (has its own git history; read-only reference, not vendored)
+SinglePlantOmics/

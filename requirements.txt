@@ -1,0 +1,34 @@
+# Python environment for SinglePlantOmics pheno_prediction (pip / local-Mac equivalent)
+# -----------------------------------------------------------------------------------
+# Derived from the paper's conda export `flowering_variability_env.yml`, which is a
+# Linux/x86-64 build (its `py310h...` build strings do not resolve on macOS arm64).
+# Versions are preserved exactly; only the conda build hashes are dropped so pip can
+# resolve platform-appropriate wheels.
+#
+# REQUIRES Python 3.10  (scikit-learn 1.1.3 has no wheels for 3.11+/3.14).
+# Recommended: python3.10 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+#
+# The scikit-learn pin is load-bearing: the committed *.sav model pickles in
+# pheno_prediction/outputs/ were created with scikit-learn 1.1.3 and are version-
+# sensitive. Loading them under a different version may error or mis-deserialize.
+
+# --- core: required to load the committed pickles and run train_elastic_nets.py ---
+scikit-learn==1.1.3
+numpy==1.23.5
+scipy==1.9.3
+pandas==1.5.2
+joblib==1.1.1          # scikit-learn runtime dep; pinned for fidelity
+threadpoolctl==2.2.0   # scikit-learn runtime dep; pinned for fidelity
+
+# --- plotting: imported at the top of train_elastic_nets.py ---
+matplotlib==3.6.2
+
+# --- analysis notebook (analysis_elastic_nets.ipynb); optional for the load step ---
+ipython==8.4.0
+jupyter==1.0.0
+notebook==6.4.12
+
+# --- extra comparison models (NOT part of the paper's pinned env) ---
+# Added for the model-agnostic comparison in code/loo_harness.py; independent of
+# the scikit-learn 1.1.3 pin above.
+xgboost==3.2.0
