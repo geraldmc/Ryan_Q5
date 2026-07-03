@@ -4,12 +4,36 @@ Leave-one-out evaluation harness for predicting **bolting status** (binary) from
 gene expression in the Redmond et al. (2024) single-plant-omics data (GEO GSE242681,
 68 plants: 45 not-bolted, 23 bolted).
 
-Two files, which must live in the same directory:
+## Components
 
-| File | Role |
-|---|---|
-| `loo_harness.py` | The runnable script: feature-set × model switches, LOO CV, balanced accuracy, saved outputs. |
-| `mad_feature_selection.py` | Builds the `mad5000` custom gene set (imported by the harness). |
+Three files, which live in the same directory (the scripts import one another):
+
+**`loo_harness.py` — the leave-one-out evaluation harness.** The hub the other two
+feed into. It loads and aligns features + labels, then evaluates one model on one
+feature set under leave-one-out CV (forced by n=68), scoring **balanced accuracy**
+(the 23/45 imbalance makes raw accuracy misleading), with standardization done
+leak-free *inside* each fold. The two open project decisions are wired as explicit,
+no-default switches — `--feature-set` (which gene universe) and `--model` (which
+classifier) — so one harness runs any model × feature-set combination and saves
+per-fold predictions plus a reproducibility manifest. It produces single-point
+estimates.
+
+**`mad_feature_selection.py` — the MAD5000 feature set.** Builds the custom gene
+universe used when `--feature-set mad5000` is selected. It ranks all 19,283 genes by
+expression variability across the 68 plants — mean or median absolute deviation on
+`log1p` TPM (the `--mad-stat` switch) — keeps the top 5,000, then force-adds five
+canonical flowering-time regulators (CO/SVP/FT/SOC1/FLC, **by AGI locus ID**, since a
+pure variance filter drops the stable repressors like FLC). The harness calls its
+`select_mad_features()`; the `full` and `regs` feature sets don't need it.
+
+**`bootstrap.py` — variance bands on those estimates.** Wraps the harness to turn a
+single-point balanced-accuracy number into a *distribution*, so the model ×
+feature-set comparisons can be read with **error bars** — the variance check the
+"model-agnostic" claim depends on. It resamples the 68 plants with the model seed held
+fixed (only the plant draw varies), scoring each resample either by out-of-bag refit
+(leak-free; default for ridge/rf/mlp/xgb) or by the cheap prediction-bootstrap (for
+enet, whose refit-per-resample is too slow). It reuses the harness's data loading and
+model registry, so the two stay in lockstep.
 
 ---
 
